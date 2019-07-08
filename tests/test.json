@@ -1,0 +1,9 @@
+{
+  "foo": 3,
+  "bar": [2.3, 40.3],
+  "foobar": ["white", "black"],
+  "foobarbar": true,
+  "foobarbarbar": true,
+  "testpath": "tests/test.json",
+  "testdir": null
+}
