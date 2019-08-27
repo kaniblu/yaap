@@ -1,9 +1,12 @@
 {
-  "foo": 3,
-  "bar": [2.3, 40.3],
-  "foobar": ["white", "black"],
-  "foobarbar": true,
-  "foobarbarbar": true,
-  "testpath": "tests/test.json",
-  "testdir": null
+  "int": 1,
+  "int-list": [1, 2],
+  "float": 3.0,
+  "float-list": [3.0, 4.0],
+  "str": "foo",
+  "str-list": ["foo", "bar"],
+  "bool-true": true,
+  "bool-false": false,
+  "path": "tests/test.json",
+  "dir": "tests"
 }

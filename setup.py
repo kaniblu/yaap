@@ -7,7 +7,7 @@ setup(
     description="Yet another argument parser (Yaap)",
     url="https://github.com/kaniblu/yaap",
     keywords="argument parser config file",
-    version="0.2",
+    version="0.3",
     packages=["yaap"],
     install_requires=list(s.rstrip("\n") for s in open("requirements.txt", "r"))
 )

@@ -6,14 +6,14 @@ import re
 import os
 import argparse
 from dataclasses import dataclass
-from typing import List, Dict, Tuple, FrozenSet, Any
+from typing import List, Dict, Tuple, Any, Sequence
 
 
 @dataclass(frozen=True)
 class Argument:
     name: str
     shortcut: str = None
-    help: str = ""
+    help: str = None
     required: bool = False
 
     @property
@@ -62,6 +62,11 @@ class Bool(Argument):
         kwargs["default"] = self.default_value
         if "required" in kwargs:
             del kwargs["required"]
+        default_msg = "(default: False)"
+        if "help" in kwargs and kwargs["help"]:
+            kwargs["help"] = f"{kwargs['help']} {default_msg}"
+        else:
+            kwargs["help"] = default_msg
         return args, kwargs
 
 
@@ -93,12 +98,16 @@ class ValueArgument(Argument):
         kwargs["type"] = self.type_cast
         if self.default is not None:
             kwargs["default"] = self.default_value
+            if "help" in kwargs and kwargs["help"]:
+                kwargs["help"] = f"{kwargs['help']} (default: %(default)s)"
+            else:
+                kwargs["help"] = "(default: %(default)s)"
         return args, kwargs
 
 
 @dataclass(frozen=True)
 class Str(ValueArgument):
-    choices: FrozenSet[str] = None
+    choices: Sequence[str] = None
     min_length: int = None
     max_length: int = None
     regex: str = None
@@ -172,7 +181,7 @@ class Int(ValueArgument):
     min_bound: int = None
     max_bound: int = None
     multiples: int = None
-    choices: FrozenSet[int] = None
+    choices: Sequence[int] = None
 
     def json_schema(self) -> dict:
         schema = super(Int, self).json_schema()
@@ -207,7 +216,7 @@ class Float(ValueArgument):
     min_bound: float = None
     max_bound: float = None
     multiples: float = None
-    choices: FrozenSet[float] = None
+    choices: Sequence[float] = None
 
     def json_schema(self) -> dict:
         schema = super(Float, self).json_schema()
@@ -243,7 +252,8 @@ class ListArgument(ValueArgument):
 
     @property
     def default_value(self):
-        return []
+        if self.default is not None:
+            return list(self.default)
 
     def json_schema(self) -> dict:
         schema = super(ValueArgument, self).json_schema()

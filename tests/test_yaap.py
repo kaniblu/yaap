@@ -1,20 +1,27 @@
 from yaap import *
 
 
-def test_yaap():
+def create_parser():
     parser = Yaap()
-    parser.add(Int("foo", min_bound=0, required=True))
-    parser.add(FloatList("bar", min_bound=2.0))
-    parser.add(StrList("foobar",
-                       choices=frozenset(["white", "black", "blue"])))
-    parser.add(Bool("foobarbar"))
-    parser.add(Bool("foobarbarbar", invert=True))
-    parser.add(Bool("fofofofo"))
-    parser.add(Path("testpath", must_exist=True, required=True))
-    parser.add(Path("testdir", must_exist=True, is_dir=True))
+    parser.add_int("int", min_bound=0, required=True)
+    parser.add_int("int-list", is_list=True)
+    parser.add_flt("float")
+    parser.add_flt("float-list", is_list=True)
+    parser.add_flt("float-list-default", is_list=True, default=(1.3, 3.4))
+    parser.add_str("str")
+    parser.add_str("str-list", is_list=True)
+    parser.add_bol("bool-true")
+    parser.add_bol("bool-false")
+    parser.add_pth("path", must_exist=True)
+    parser.add_pth("dir", must_exist=True, is_dir=True)
+    return parser
+
+
+def test_yaap():
+    parser = create_parser()
     args = parser.parse("@load tests/test.json".split())
-    print(args)
     parser.validate(args)
+    print(args)
 
 
 def test_yaap2():
@@ -54,3 +61,11 @@ def test_yaap2():
     )
     print(args)
     parser.validate(args)
+
+
+def main():
+    test_yaap()
+
+
+if __name__ == "__main__":
+    main()
