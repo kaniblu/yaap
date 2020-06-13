@@ -54,7 +54,7 @@ class Bool(Argument):
         return self.invert
 
     def json_schema(self) -> dict:
-        return {"type": "boolean"}
+        return dict(type="boolean", **super().json_schema())
 
     def generate_args(self) -> Tuple[List, Dict]:
         args, kwargs = super(Bool, self).generate_args()

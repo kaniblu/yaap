@@ -1,103 +1,77 @@
-__all__ = ["StopParsing", "ControlAction", "Yaap"]
+__all__ = ["Yaap"]
 
 import sys
 import json
 import yaml
+import warnings
 import argparse
-from dataclasses import dataclass, field
-from typing import Dict, Sequence, Any
+from dataclasses import dataclass
+from typing import Dict, Sequence, Any, Optional
 
 import jsonschema
 
 from .argument import *
-
-
-class StopParsing(Exception):
-
-    def __init__(self, args: Sequence[str]):
-        super(StopParsing, self).__init__()
-        self.args = args
-
-
-class ControlAction(argparse.Action):
-
-    def __init__(self, *args, arse=None, **kwargs):
-        super(ControlAction, self).__init__(*args, **kwargs)
-        self.arse: Yaap = arse
-
-        assert self.arse is not None
-        subparser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-        group = subparser.add_mutually_exclusive_group()
-        group.add_argument("--load", type=str, metavar="CONFIG")
-        group.add_argument("--schema", action="store_true", default=False)
-        self.subparser = subparser
-
-    def show_schema(self):
-        schema = self.arse.schema()
-        sys.stdout.write(json.dumps(schema, ensure_ascii=False, indent=2))
-        sys.exit()
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        delattr(namespace, self.dest)
-        if not values:
-            return
-        values = ["--" + v.lstrip(self.arse.control_char)
-                  if v.startswith(self.arse.control_char) else v for v in
-                  values]
-        subargs = self.subparser.parse_args(values)
-        if subargs.schema:
-            self.show_schema()
-        elif subargs.load is not None:
-            with open(subargs.load, "r") as f:
-                cfg = yaml.safe_load(f)
-            self.arse.validate(cfg)
-            args = []
-            for k, v in cfg.items():
-                if v is None:
-                    continue
-                arg: Argument = self.arse.arguments[k]
-                if isinstance(v, bool):
-                    assert isinstance(arg, Bool)
-                    if v != arg.invert:
-                        args.append(f"--{k}")
-                elif isinstance(v, str):
-                    args.extend([f"--{k}", v])
-                elif isinstance(v, list):
-                    args.append(f"--{k}")
-                    args.extend(map(str, v))
-                else:
-                    args.extend((f"--{k}", str(v)))
-            raise StopParsing(args)
+from .utils import private_field
 
 
 @dataclass
 class Yaap:
     name: str = None
     desc: str = None
-    control_char: str = "@"
-    parser: argparse.ArgumentParser = field(init=False, hash=False)
-    arguments: Dict[str, Argument] = field(init=False, hash=False,
-                                           default_factory=dict)
+    on_extra: str = "error"
+    add_config_arg: bool = True
+    config_arg_name: str = "config"
+    add_schema_arg: bool = True
+    schema_arg_name: str = "schema"
+    _parser: argparse.ArgumentParser = private_field()
+    _reserved_parser: argparse.ArgumentParser = private_field()
+    _args: Dict[str, Argument] = private_field(default_factory=dict)
 
     def __post_init__(self):
-        if len(self.control_char) > 1:
-            raise ValueError(f"control character must not be a string: "
-                             f"len({self.control_char}) > 1")
-        self.parser = argparse.ArgumentParser(
+        if self.on_extra not in {"error", "warn", "ignore"}:
+            raise ValueError(f"unrecognized on_extra mode: {self.on_extra}")
+        self._parser = argparse.ArgumentParser(
             prog=None if self.name is None else self.name,
             description=None if self.desc is None else self.desc
         )
-        self.parser.add_argument("CONTROL", nargs="*",
-                                 action=lambda *args, **kwargs:
-                                 ControlAction(*args, arse=self, **kwargs))
+        self._reserved_parser = argparse.ArgumentParser()
+        if self.add_config_arg:
+            config_arg = Path(
+                name=self.config_arg_name,
+                must_exist=True,
+                help="Path to a configuration (json/yaml) file "
+                     "that contains argument key-values. For keys "
+                     "that are specified in both command-line "
+                     "arguments and config arguments, the former "
+                     "will take precedence."
+            )
+            self._add_reserved(config_arg)
+        if self.add_schema_arg:
+            schema_arg = Bool(
+                self.schema_arg_name,
+                help="Prints the argument schema in json format."
+            )
+            self._add_reserved(schema_arg)
+
+    @property
+    def reserved_arg_names(self):
+        return self.config_arg_name, self.schema_arg_name
+
+    def _add_reserved(self, arg: Argument):
+        self._args[arg.name] = arg
+        args, kwargs = arg.generate_args()
+        self._parser.add_argument(*args, **kwargs)
+        self._reserved_parser.add_argument(*args, **kwargs)
 
     def add(self, arg: Argument):
-        if arg.name in self.arguments:
-            raise IndexError(f"argument of the same name exists: "
-                             f"{self.arguments[arg.name]}")
-        self.arguments[arg.name] = arg
+        if arg.name in self._args:
+            raise NameError(f"argument of the same name exists: "
+                            f"{self._args[arg.name]}")
+        if arg.name in self.reserved_arg_names:
+            raise NameError(f"argument name is reserved: {arg.name}")
+        self._args[arg.name] = arg
         args, kwargs = arg.generate_args()
-        self.parser.add_argument(*args, **kwargs)
+        self._parser.add_argument(*args, **kwargs)
 
     def add_int(self,
                 name: str,
@@ -381,18 +355,66 @@ class Yaap:
             "$id": str(hash((self.name, self.desc))),
             "type": "object",
             "properties": {arg.name: arg.json_schema()
-                           for arg in self.arguments.values()},
+                           for arg in self._args.values()},
             "required": [arg.name for arg in
-                         self.arguments.values() if arg.required]
+                         self._args.values() if arg.required]
         }
 
     def validate(self, args: dict):
         """Validate a dictionary of arguments against this argument spec."""
         jsonschema.validate(args, self.schema())
 
-    def parse(self, args: Sequence[str] = None) -> dict:
-        try:
-            args = self.parser.parse_args(args)
-        except StopParsing as e:
-            args = self.parser.parse_args(e.args)
-        return vars(args)
+    def print_schema(self):
+        schema = self.schema()
+        sys.stdout.write(json.dumps(schema, ensure_ascii=False, indent=2))
+
+    def _parse_config(self, config: dict):
+        args = []
+        for k, v in config.items():
+            if v is None:
+                continue
+            arg: Argument = self._args[k]
+            if isinstance(v, bool):
+                assert isinstance(arg, Bool)
+                if v != arg.invert:
+                    args.append(f"--{k}")
+            elif isinstance(v, str):
+                args.extend([f"--{k}", v])
+            elif isinstance(v, list):
+                args.append(f"--{k}")
+                args.extend(map(str, v))
+            else:
+                args.extend((f"--{k}", str(v)))
+        return args
+
+    def _argparse(self, args, namespace=None):
+        if self.on_extra == "ignore" or self.on_extra == "warn":
+            namespace, extra_args = \
+                self._parser.parse_known_args(args, namespace)
+            if self.on_extra == "warn":
+                warnings.warn(f"following arguments are not argparsed: "
+                              f"{extra_args}")
+        elif self.on_extra == "error":
+            namespace = self._parser.parse_args(args, namespace)
+        return namespace
+
+    def parse(self, args: Optional[Sequence[str]] = None,
+              namespace: Optional[argparse.Namespace] = None
+              ) -> argparse.Namespace:
+        if not self.reserved_arg_names:
+            return self._argparse(args=args, namespace=namespace)
+        reserved_namespace, _ = self._reserved_parser.parse_known_args(args)
+        if self.add_schema_arg and getattr(reserved_namespace,
+                                           self.schema_arg_name):
+            self.print_schema()
+            exit(0)
+        if self.add_config_arg:
+            config_path = getattr(reserved_namespace, self.config_arg_name)
+            if config_path is not None:
+                with open(config_path, "r") as f:
+                    config = yaml.safe_load(f)
+                self.validate(config)
+                config_args = self._parse_config(config)
+                args = list(config_args) + list(args or sys.argv[1:])
+        namespace = self._argparse(args=args, namespace=namespace)
+        return namespace

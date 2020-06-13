@@ -19,13 +19,13 @@ def create_parser():
 
 def test_yaap():
     parser = create_parser()
-    args = parser.parse("@load tests/test.json".split())
-    parser.validate(args)
+    args = parser.parse("--config tests/test.json".split())
+    parser.validate(vars(args))
     print(args)
 
 
 def test_yaap2():
-    parser = Yaap()
+    parser = Yaap(on_extra="warn")
     parser.add(Int(
         "int", shortcut="i", min_bound=0, required=True
     ))
@@ -57,10 +57,10 @@ def test_yaap2():
     args = parser.parse(
         "--int 3 --int-list 2 3 --float 3.0 --float-list 5 10 "
         "--path tests/test.json --dir tests --str b5 "
-        "--str-list abc defg --bool".split()
+        "--str-list abc defg --bool --test one".split()
     )
     print(args)
-    parser.validate(args)
+    parser.validate(vars(args))
 
 
 def main():
