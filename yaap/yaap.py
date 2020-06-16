@@ -391,7 +391,7 @@ class Yaap:
         if self.on_extra == "ignore" or self.on_extra == "warn":
             namespace, extra_args = \
                 self._parser.parse_known_args(args, namespace)
-            if self.on_extra == "warn":
+            if extra_args and self.on_extra == "warn":
                 warnings.warn(f"following arguments are not argparsed: "
                               f"{extra_args}")
         elif self.on_extra == "error":

@@ -7,7 +7,7 @@ setup(
     description="Yet another argument parser (Yaap)",
     url="https://github.com/kaniblu/yaap",
     keywords="argument parser config file",
-    version="0.4.1",
+    version="0.4.2",
     packages=["yaap"],
     install_requires=[
         "pyyaml==5.1.1",
