@@ -10,7 +10,7 @@ setup(
     version="0.4.2",
     packages=["yaap"],
     install_requires=[
-        "pyyaml==5.1.1",
+        "pyyaml==5.4",
         "jsonschema==3.0.1"
     ]
 )
